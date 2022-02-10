@@ -19,31 +19,26 @@ const clearImage = (filePath) => {
   fs.unlink(constructedPath, (err) => console.log(err));
 };
 
-exports.getPosts = (req, res, next) => {
+exports.getPosts = async (req, res, next) => {
   const currentPage = req.query.page || 1;
   const perPage = 2;
-  let totalItems = 0;
 
-  Post.find()
-    .countDocuments()
-    .then((totalCount) => {
-      totalItems = totalCount;
+  try {
+    const totalItems = await Post.find().countDocuments();
 
-      return Post.find()
-        .skip((currentPage - 1) * perPage)
-        .limit(perPage)
-        .populate('creator');
-    })
-    .then((posts) => {
-      return res.status(200).json({
-        message: 'Posts fetched',
-        posts,
-        totalItems,
-      });
-    })
-    .catch((err) => {
-      setDefaultErrorCode(err, next);
+    const posts = await Post.find()
+      .skip((currentPage - 1) * perPage)
+      .limit(perPage)
+      .populate('creator');
+
+    return res.status(200).json({
+      message: 'Posts fetched',
+      posts,
+      totalItems,
     });
+  } catch (err) {
+    setDefaultErrorCode(err, next);
+  }
 };
 
 exports.createPost = (req, res, next) => {
