@@ -3,6 +3,8 @@ const path = require('path');
 
 const { validationResult } = require('express-validator');
 
+const io = require('../socket');
+
 const Post = require('../models/post');
 const User = require('../models/user');
 
@@ -29,7 +31,8 @@ exports.getPosts = async (req, res, next) => {
     const posts = await Post.find()
       .skip((currentPage - 1) * perPage)
       .limit(perPage)
-      .populate('creator');
+      .populate('creator')
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       message: 'Posts fetched',
@@ -82,6 +85,11 @@ exports.createPost = (req, res, next) => {
       return user.save();
     })
     .then((user) => {
+      io.getIO().emit('posts', {
+        action: 'create',
+        post: { ...post._doc, creator: { _id: req.userId, name: user.name } },
+      });
+
       return res.status(201).json({
         message: 'Post created successfully',
         post,
@@ -145,6 +153,7 @@ exports.updatePost = (req, res, next) => {
   }
 
   Post.findById(postId)
+    .populate('creator')
     .then((post) => {
       if (!post) {
         const error = new Error('Post not found');
@@ -153,7 +162,7 @@ exports.updatePost = (req, res, next) => {
         throw error;
       }
 
-      if (post.creator.toString() !== req.userId) {
+      if (post.creator._id.toString() !== req.userId) {
         const error = new Error('Not authorized');
         error.statusCode = 401;
         throw error;
@@ -170,6 +179,8 @@ exports.updatePost = (req, res, next) => {
       return post.save();
     })
     .then((result) => {
+      io.getIO().emit('posts', { action: 'update', post: result });
+
       return res.status(200).json({
         message: 'Post updated successfully.',
         post: result,
@@ -210,6 +221,8 @@ exports.deletePost = (req, res, next) => {
       return user.save();
     })
     .then(() => {
+      io.getIO().emit('posts', { action: 'delete', post: postId });
+
       return res.status(200).json({
         message: 'Post deleted.',
       });
